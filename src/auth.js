@@ -1,5 +1,5 @@
-const CLIENT_ID = "YOUR_SPOTIFY_CLIENT_ID";
-const REDIRECT_URI = "https://vite-react-kappa-snowy-63.vercel.app/callback";
+const CLIENT_ID = "fb7ea60b500d41b8b3edb920f750e08f";
+const REDIRECT_URI = "https://moodify-krish.vercel.app/callback";
 const AUTH_ENDPOINT = "https://accounts.spotify.com/authorize";
 const RESPONSE_TYPE = "token";
 const SCOPES = ["user-library-read", "user-read-private"];
