@@ -47,21 +47,28 @@ function App() {
     }
   }, []);
 
-  const handleLogin = async () => {
-    const verifier = [...Array(128)]
-      .map(() => Math.random().toString(36)[2])
-      .join("");
-    const challenge = base64URLEncode(await sha256(verifier));
-    localStorage.setItem("code_verifier", verifier);
+const handleLogin = async () => {
+  const verifier = [...Array(128)]
+    .map(() => Math.random().toString(36)[2])
+    .join("");
+  const challenge = base64URLEncode(await sha256(verifier));
+  localStorage.setItem("code_verifier", verifier);
 
-    const response = await axios.get("http://localhost:5000/start-auth"); // if testing locally
-;
-    const { auth_url, state } = response.data;
-    localStorage.setItem("auth_state", state);
+  const state = crypto.randomUUID(); // generate a unique state
+  localStorage.setItem("auth_state", state);
 
-    const authWithChallenge = auth_url + "&code_challenge=" + challenge + "&code_challenge_method=S256";
-    window.location.href = authWithChallenge;
-  };
+  const authUrl = `https://accounts.spotify.com/authorize?` +
+    `response_type=code` +
+    `&client_id=${CLIENT_ID}` +
+    `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+    `&scope=user-library-read%20user-read-private` +
+    `&state=${state}` +
+    `&code_challenge=${challenge}` +
+    `&code_challenge_method=S256`;
+
+  window.location.href = authUrl;
+};
+
 
   return (
     <div style={{ padding: 30 }}>
