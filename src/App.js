@@ -1,7 +1,7 @@
+// App.js — Full PKCE Flow + Moodify Request
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 
-// PKCE helpers
 function base64URLEncode(str) {
   return btoa(String.fromCharCode(...new Uint8Array(str)))
     .replace(/\+/g, "-")
@@ -19,38 +19,37 @@ const CLIENT_ID = "fb7ea60b500d41b8b3edb920f750e08f";
 const REDIRECT_URI = "https://moodify-krish.vercel.app/callback";
 
 function App() {
-  const [accessToken, setAccessToken] = useState(() => {
-    return localStorage.getItem("access_token");
-  });
+  const [accessToken, setAccessToken] = useState(localStorage.getItem("access_token"));
+  const [text, setText] = useState("");
+  const [song, setSong] = useState(null);
 
-useEffect(() => {
-  const isCallback = window.location.pathname.includes("/callback");
-  if (!isCallback) return;
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get("code");
+    const state = urlParams.get("state");
 
-  const urlParams = new URLSearchParams(window.location.search);
-  const code = urlParams.get("code");
-  const state = urlParams.get("state");
+    if (code && state) {
+      const storedVerifier = localStorage.getItem("code_verifier");
+      if (!storedVerifier) return;
 
-  if (code && state) {
-    const storedVerifier = localStorage.getItem("code_verifier");
-    if (!storedVerifier) return;
-
-    axios
-      .post("https://moodify-backend.onrender.com/callback", {
-        code,
-        state,
-      })
-      .then((res) => {
-        setAccessToken(res.data.access_token);
-        localStorage.setItem("access_token", res.data.access_token);
-        window.location.href = "/"; // ✅ Go back to home after login
-      })
-      .catch((err) => {
-        console.error("Token exchange failed:", err.response?.data || err);
-      });
-  }
-}, []);
-
+      axios
+        .post("https://moodify-backend.onrender.com/callback", {
+          code,
+          state,
+          code_verifier: storedVerifier,
+          redirect_uri: REDIRECT_URI,
+          client_id: CLIENT_ID,
+        })
+        .then((res) => {
+          localStorage.setItem("access_token", res.data.access_token);
+          setAccessToken(res.data.access_token);
+          window.history.replaceState({}, document.title, "/");
+        })
+        .catch((err) => {
+          console.error("Token exchange failed:", err.response?.data || err);
+        });
+    }
+  }, []);
 
   const handleLogin = async () => {
     const verifier = [...Array(128)]
@@ -59,30 +58,31 @@ useEffect(() => {
     const challenge = base64URLEncode(await sha256(verifier));
     localStorage.setItem("code_verifier", verifier);
 
-    const response = await axios.get("https://moodify-backend.onrender.com/start-auth");
-    const { auth_url, state } = response.data;
+    const state = crypto.randomUUID();
     localStorage.setItem("auth_state", state);
 
-    const authWithChallenge =
-      auth_url + "&code_challenge=" + challenge + "&code_challenge_method=S256";
-    window.location.href = authWithChallenge;
+    const authUrl = `https://accounts.spotify.com/authorize?` +
+      `response_type=code` +
+      `&client_id=${CLIENT_ID}` +
+      `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+      `&scope=user-library-read%20user-read-private` +
+      `&state=${state}` +
+      `&code_challenge=${challenge}` +
+      `&code_challenge_method=S256`;
+
+    window.location.href = authUrl;
   };
 
-  const getRecommendation = async () => {
-    const token = accessToken || localStorage.getItem("access_token");
-    const inputText = "I feel tired from school and work"; // You can replace with dynamic input
-
+  const handleRecommend = async () => {
     try {
       const res = await axios.post("https://moodify-backend.onrender.com/recommend", {
-        text: inputText,
-        access_token: token,
+        text,
+        access_token: accessToken,
       });
-
-      console.log("🎵 Recommended trac:", res.data);
-      alert(`🎵 Moodify suggests: ${res.data.track_name} by ${res.data.artist_name}`);
+      setSong(res.data.song || "No song found");
     } catch (err) {
-      console.error("Error getting recommendation:", err);
-      alert("⚠️ Error fetching song recommendation.");
+      console.error("Recommendation error:", err.response?.data || err);
+      setSong("Error getting recommendation.");
     }
   };
 
@@ -93,8 +93,16 @@ useEffect(() => {
         <button onClick={handleLogin}>Login with Spotify</button>
       ) : (
         <>
-          <p>✅ Logged in with Spotify! Token is active.</p>
-          <button onClick={getRecommendation}>Get Mood-Based Song</button>
+          <p>✅ Logged in with Spotify!</p>
+          <input
+            type="text"
+            placeholder="How do you feel?"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            style={{ padding: 8, marginRight: 10 }}
+          />
+          <button onClick={handleRecommend}>Get Mood-Based Song</button>
+          {song && <p>🎵 Recommended: {song}</p>}
         </>
       )}
     </div>
